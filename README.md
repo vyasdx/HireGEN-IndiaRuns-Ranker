@@ -6,7 +6,7 @@ The challenge goal is to rank 100,000 anonymized candidate profiles against a Se
 
 ## Current Phase
 
-Phase 1 baseline:
+Phase 4 baseline + audit report:
 
 - CPU-only Python ranker
 - No hosted LLM calls
@@ -15,6 +15,8 @@ Phase 1 baseline:
 - JSON-array support for the official sample file
 - Deterministic top-100 output
 - Strict CSV validator
+- Deterministic reasoning templates grounded in candidate evidence
+- Markdown/JSON submission audit report
 
 ## Repository Layout
 
@@ -39,6 +41,17 @@ Validate:
 
 ```powershell
 python scripts/validate_submission.py outputs/submission_sample.csv
+```
+
+Generate an audit report:
+
+```powershell
+python scripts/generate_report.py `
+  --submission outputs/submission_sample.csv `
+  --candidates data/official/sample_candidates.json `
+  --runtime-seconds 0.02 `
+  --output-md outputs/report_sample.md `
+  --output-json outputs/report_sample.json
 ```
 
 ## Full Dataset
