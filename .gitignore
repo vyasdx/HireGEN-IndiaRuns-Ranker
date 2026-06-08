@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local datasets and generated artifacts
+data/raw/
+data/full/
+*.jsonl
+outputs/*.csv
+outputs/*.log
+outputs/
+
+# Keep official small support files, avoid committing large candidate pool.
+!data/official/sample_candidates.json
+!data/official/sample_submission.csv
+!data/official/candidate_schema.json
+!data/official/*.docx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
