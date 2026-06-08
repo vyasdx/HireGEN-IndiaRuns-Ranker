@@ -133,9 +133,12 @@ def _render_result(result: dict[str, Any]) -> None:
     st.markdown(
         f"""
         <div class="hash-card">
-          <strong>Determinism hash</strong>
+          <strong>CSV fingerprint</strong>
           <code>{summary["submission_sha256"]}</code>
-          <span>Same input + same code path should reproduce this CSV hash.</span>
+          <span>
+            This is a SHA-256 fingerprint of the generated CSV. If the same data and code are run again,
+            this number should remain identical.
+          </span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -280,6 +283,38 @@ def _css() -> None:
             radial-gradient(circle at 86% 22%, rgba(126, 87, 255, .18), transparent 28%),
             linear-gradient(135deg, #f7fbff 0%, #eaf4ff 44%, #f9fbff 100%);
           color: #111827;
+        }
+        [data-testid="stMetric"] {
+          padding: 16px 18px;
+          border-radius: 18px;
+          background: rgba(255,255,255,.78);
+          border: 1px solid rgba(255,255,255,.9);
+          box-shadow: 0 14px 34px rgba(32, 84, 142, .10);
+        }
+        [data-testid="stMetricLabel"],
+        [data-testid="stMetricLabel"] p {
+          color: #475569 !important;
+          font-weight: 800 !important;
+        }
+        [data-testid="stMetricValue"],
+        [data-testid="stMetricValue"] div {
+          color: #111827 !important;
+          font-weight: 900 !important;
+        }
+        [data-testid="stMetricDelta"] {
+          color: #4338ca !important;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+          gap: 10px;
+        }
+        .stTabs [data-baseweb="tab"] {
+          color: #334155 !important;
+          font-weight: 800;
+        }
+        .stTabs [aria-selected="true"] {
+          color: #4338ca !important;
+          background: rgba(255,255,255,.72);
+          border-radius: 999px;
         }
         .hero {
           display: flex;
