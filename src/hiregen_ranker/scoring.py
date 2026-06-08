@@ -123,6 +123,15 @@ class ScoreDetails:
     reasoning: str
 
 
+@dataclass(frozen=True)
+class EvidenceBundle:
+    direct_ai_terms: tuple[str, ...]
+    engineering_terms: tuple[str, ...]
+    evaluation_terms: tuple[str, ...]
+    evidence_titles: tuple[str, ...]
+    concern_labels: tuple[str, ...]
+
+
 def score_candidate(candidate: dict[str, Any]) -> ScoreDetails:
     profile = candidate.get("profile", {})
     signals = candidate.get("redrob_signals", {})
@@ -186,6 +195,15 @@ def score_candidate(candidate: dict[str, Any]) -> ScoreDetails:
         role_fit_score=role_fit_score,
     )
     recency_score = _recency_score(signals)
+    evidence = _evidence_bundle(
+        candidate,
+        strong_ai_hits=strong_ai_hits,
+        technical_ai_hits=technical_ai_hits,
+        engineering_hits=engineering_hits,
+        evaluation_hits=evaluation_hits,
+        title_multiplier=title_multiplier,
+        penalty_score=penalty_score,
+    )
 
     raw_final_score = max(
         0.0,
@@ -194,6 +212,7 @@ def score_candidate(candidate: dict[str, Any]) -> ScoreDetails:
     final_score = min(0.9999, 1.0 - math.exp(-raw_final_score / 75.0))
 
     reasoning = _reasoning(
+        candidate_id=candidate_id,
         title=title,
         years=years,
         ai_hits=strong_ai_hits,
@@ -204,6 +223,7 @@ def score_candidate(candidate: dict[str, Any]) -> ScoreDetails:
         title_multiplier=title_multiplier,
         penalty_score=penalty_score,
         signals=signals,
+        evidence=evidence,
     )
 
     return ScoreDetails(
@@ -442,8 +462,71 @@ def _recency_score(signals: dict[str, Any]) -> float:
     return 0.3
 
 
+def _evidence_bundle(
+    candidate: dict[str, Any],
+    *,
+    strong_ai_hits: int,
+    technical_ai_hits: int,
+    engineering_hits: int,
+    evaluation_hits: int,
+    title_multiplier: float,
+    penalty_score: float,
+) -> EvidenceBundle:
+    technical_text = _technical_text(candidate)
+    full_text = _candidate_text(candidate)
+    direct_ai_terms = _matched_terms(technical_text, STRONG_AI_TERMS, limit=3)
+    engineering_terms = _matched_terms(full_text, ENGINEERING_TERMS, limit=3)
+    evaluation_terms = _matched_terms(full_text, EVALUATION_TERMS, limit=2)
+    evidence_titles = _evidence_titles(candidate.get("career_history", []), limit=2)
+
+    concern_labels: list[str] = []
+    if technical_ai_hits == 0 and strong_ai_hits:
+        concern_labels.append("AI terms are not backed by technical role evidence")
+    if title_multiplier < 0.7:
+        concern_labels.append("current title is not a close AI engineering fit")
+    elif title_multiplier < 0.9:
+        concern_labels.append("title is adjacent but not core AI")
+    if engineering_hits < 3:
+        concern_labels.append("limited production engineering signal")
+    if evaluation_hits == 0:
+        concern_labels.append("evaluation/benchmark signal is missing")
+    if penalty_score:
+        concern_labels.append("penalty applied for unsupported or weak-fit signals")
+
+    return EvidenceBundle(
+        direct_ai_terms=direct_ai_terms,
+        engineering_terms=engineering_terms,
+        evaluation_terms=evaluation_terms,
+        evidence_titles=evidence_titles,
+        concern_labels=tuple(concern_labels[:2]),
+    )
+
+
+def _matched_terms(text: str, terms: set[str], *, limit: int) -> tuple[str, ...]:
+    matches = sorted(term for term in terms if term in text)
+    return tuple(matches[:limit])
+
+
+def _evidence_titles(career_history: list[dict[str, Any]], *, limit: int) -> tuple[str, ...]:
+    titles: list[str] = []
+    for role in career_history:
+        title = str(role.get("title", "")).strip()
+        description = str(role.get("description", "")).lower()
+        if title and (
+            any(term in title.lower() for term in TITLE_TERMS)
+            or any(term in description for term in STRONG_AI_TERMS | ENGINEERING_TERMS | EVALUATION_TERMS)
+        ):
+            titles.append(title)
+    deduped: list[str] = []
+    for title in titles:
+        if title not in deduped:
+            deduped.append(title)
+    return tuple(deduped[:limit])
+
+
 def _reasoning(
     *,
+    candidate_id: str,
     title: str,
     years: float,
     ai_hits: int,
@@ -454,20 +537,70 @@ def _reasoning(
     title_multiplier: float,
     penalty_score: float,
     signals: dict[str, Any],
+    evidence: EvidenceBundle,
 ) -> str:
     response_rate = float(signals.get("recruiter_response_rate") or 0)
-    parts = [
-        f"{title} with {years:.1f} yrs",
-        f"{technical_ai_hits} direct AI/retrieval signals",
-        f"{ai_hits} broad AI/retrieval terms",
-        f"{engineering_hits} engineering signals",
-    ]
-    if evaluation_hits:
-        parts.append(f"{evaluation_hits} evaluation signals")
-    parts.append(f"availability {availability_multiplier:.2f}")
-    if title_multiplier < 0.9:
-        parts.append(f"title fit {title_multiplier:.2f}")
-    parts.append(f"response rate {response_rate:.2f}")
-    if penalty_score:
-        parts.append(f"penalty {penalty_score:.0f} for weak/unsupported signals")
-    return "; ".join(parts) + "."
+    title_note = f"{title} with {years:.1f} yrs"
+    ai_note = _terms_note(evidence.direct_ai_terms, fallback=f"{technical_ai_hits} direct AI/retrieval signals")
+    eng_note = _terms_note(evidence.engineering_terms, fallback=f"{engineering_hits} engineering signals")
+    eval_note = _terms_note(
+        evidence.evaluation_terms,
+        fallback="no evaluation evidence found" if evaluation_hits == 0 else f"{evaluation_hits} evaluation signals",
+    )
+    career_note = _career_note(evidence.evidence_titles)
+    availability_note = f"availability {availability_multiplier:.2f}, response {response_rate:.2f}"
+    concern_note = _concern_note(evidence.concern_labels, title_multiplier, penalty_score)
+
+    variant = _candidate_number(candidate_id) % 4
+    if variant == 0:
+        return (
+            f"{title_note}; matched {ai_note} with {eng_note}. "
+            f"{career_note} {availability_note}. {concern_note}"
+        ).strip()
+    if variant == 1:
+        return (
+            f"Strong fit signal from {title_note}: {ai_note}; {eng_note}; {eval_note}. "
+            f"{availability_note}. {concern_note}"
+        ).strip()
+    if variant == 2:
+        return (
+            f"Ranked for {ai_note} plus {eng_note}; profile shows {title_note}. "
+            f"{career_note} {availability_note}. {concern_note}"
+        ).strip()
+    return (
+        f"{title_note}; evidence includes {ai_note}. "
+        f"Engineering/recruiter signals: {eng_note}; {availability_note}. {concern_note}"
+    ).strip()
+
+
+def _terms_note(terms: tuple[str, ...], *, fallback: str) -> str:
+    if not terms:
+        return fallback
+    if len(terms) == 1:
+        return terms[0]
+    return ", ".join(terms[:-1]) + f", and {terms[-1]}"
+
+
+def _career_note(titles: tuple[str, ...]) -> str:
+    if not titles:
+        return "Career history provides limited direct title evidence."
+    return f"Relevant role evidence: {_terms_note(titles, fallback='career history')}."
+
+
+def _concern_note(labels: tuple[str, ...], title_multiplier: float, penalty_score: float) -> str:
+    concerns = list(labels)
+    if title_multiplier < 0.9 and not any("title" in item for item in concerns):
+        concerns.append(f"title fit {title_multiplier:.2f}")
+    if penalty_score and not any("penalty" in item for item in concerns):
+        concerns.append(f"penalty {penalty_score:.0f}")
+
+    if not concerns:
+        return "No major deterministic concern triggered."
+    return "Concern: " + "; ".join(concerns[:2]) + "."
+
+
+def _candidate_number(candidate_id: str) -> int:
+    try:
+        return int(candidate_id.rsplit("_", 1)[1])
+    except (IndexError, ValueError):
+        return 0
