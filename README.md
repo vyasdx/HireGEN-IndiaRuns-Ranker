@@ -54,6 +54,15 @@ python scripts/generate_report.py `
   --output-json outputs/report_sample.json
 ```
 
+## Run Judge Demo UI
+
+The Streamlit demo lets judges select sample data or upload JSON/JSONL candidates, run the deterministic ranker, and inspect tiers, evidence coverage, control checks, and grounded reasoning.
+
+```powershell
+pip install -r requirements-demo.txt
+streamlit run demo/streamlit_app.py
+```
+
 ## Full Dataset
 
 Keep the official full `candidates.jsonl` outside Git. A recommended local path is:
