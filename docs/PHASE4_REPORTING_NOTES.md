@@ -46,6 +46,12 @@ Wrote markdown report: outputs/report_full_phase4.md
 Wrote JSON report: outputs/report_full_phase4.json
 ```
 
+A copy of the latest markdown audit report is committed at:
+
+```text
+docs/REPORT_FULL_PHASE4.md
+```
+
 ## Current Full-Run Evidence
 
 ```text
