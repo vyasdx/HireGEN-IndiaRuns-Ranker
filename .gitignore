@@ -15,6 +15,10 @@ outputs/*.csv
 outputs/*.log
 outputs/
 
+# Local submission working copies / exported decks
+Documents/
+deliverables/
+
 # Keep official small support files, avoid committing large candidate pool.
 !data/official/sample_candidates.json
 !data/official/sample_submission.csv
