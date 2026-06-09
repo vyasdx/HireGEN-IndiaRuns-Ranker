@@ -50,10 +50,20 @@ def main() -> None:
         _empty_state()
         return
 
-    if run or "demo_result" not in st.session_state:
+    run_key = _run_key(source_mode, uploaded, limit)
+    previous_key = st.session_state.get("demo_result", {}).get("run_key")
+    if previous_key and previous_key != run_key:
+        st.session_state.pop("demo_result", None)
+
+    if run:
         with st.spinner("Ranking candidates with deterministic proof signals..."):
             result = _run_demo(input_path, limit)
+            result["run_key"] = run_key
             st.session_state["demo_result"] = result
+
+    if "demo_result" not in st.session_state:
+        _ready_state(source_mode, uploaded, limit)
+        return
 
     _render_result(st.session_state["demo_result"])
 
@@ -83,6 +93,26 @@ def _hero() -> None:
 
 def _empty_state() -> None:
     st.info("Upload a candidate JSON/JSONL file to run the demo.")
+
+
+def _ready_state(source_mode: str, uploaded: Any, limit: int) -> None:
+    file_name = uploaded.name if uploaded is not None else "official sample"
+    st.markdown(
+        f"""
+        <div class="ready-card">
+          <strong>Ready to rank</strong>
+          <p>Source: {source_mode} · File: {file_name} · Output limit: {limit}</p>
+          <span>Click <b>Run HireGEN Ranker</b> to generate the executive proof checks and shortlist.</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _run_key(source_mode: str, uploaded: Any, limit: int) -> tuple[str, str, int, int]:
+    if uploaded is None:
+        return (source_mode, "official-sample", 0, limit)
+    return (source_mode, uploaded.name, len(uploaded.getvalue()), limit)
 
 
 def _input_path(source_mode: str, uploaded: Any) -> Path | None:
@@ -127,8 +157,11 @@ def _render_result(result: dict[str, Any]) -> None:
     cols[0].metric("Ranked", summary["candidate_count"])
     cols[1].metric("Runtime", f"{result['elapsed']:.2f}s")
     cols[2].metric("Non-eng top 10", controls["top_10_non_engineering_count"])
-    cols[3].metric("AI titles top 100", controls["top_100_ai_title_count"])
+    cols[3].metric("AI-title count", controls["top_100_ai_title_count"])
     cols[4].metric("Top-10 spread", separation["spread"])
+    st.caption(
+        "Runtime scans the full uploaded file to find the best candidates. Top-10 spread stays the same across 10/20/30 outputs if the top 10 candidates are unchanged."
+    )
 
     st.markdown(
         f"""
@@ -160,12 +193,15 @@ def _render_result(result: dict[str, Any]) -> None:
 
     with tabs[4]:
         st.dataframe(result["rows"], use_container_width=True, hide_index=True)
+        st.markdown('<div class="download-wrap">', unsafe_allow_html=True)
         st.download_button(
             "Download demo CSV",
             data=Path(result["output_path"]).read_text(encoding="utf-8"),
             file_name="hiregen_ranker_demo_submission.csv",
             mime="text/csv",
+            use_container_width=False,
         )
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _tier_view(rows: list[dict[str, Any]]) -> None:
@@ -354,7 +390,7 @@ def _css() -> None:
           display: grid;
           gap: 10px;
         }
-        .hero-card span, .hash-card {
+        .hero-card span, .hash-card, .ready-card {
           border: 1px solid rgba(255,255,255,.88);
           border-radius: 18px;
           background: rgba(255,255,255,.72);
@@ -365,9 +401,21 @@ def _css() -> None:
           font-weight: 800;
           color: #172033;
         }
-        .hash-card {
+        .hash-card, .ready-card {
           padding: 16px 18px;
           margin: 12px 0 22px;
+        }
+        .ready-card strong {
+          color: #111827;
+          font-size: 18px;
+        }
+        .ready-card p {
+          color: #334155;
+          margin: 8px 0;
+          font-weight: 700;
+        }
+        .ready-card span {
+          color: #52657f;
         }
         .hash-card code {
           display: block;
@@ -402,6 +450,19 @@ def _css() -> None:
           color: #4338ca;
           font-weight: 900;
           font-size: 13px;
+        }
+        .download-wrap div[data-testid="stDownloadButton"] button,
+        div[data-testid="stDownloadButton"] button {
+          background: #111827 !important;
+          color: #ffffff !important;
+          border: 1px solid rgba(255,255,255,.25) !important;
+          border-radius: 12px !important;
+          font-weight: 900 !important;
+          box-shadow: 0 16px 34px rgba(17,24,39,.22);
+        }
+        div[data-testid="stDownloadButton"] button p,
+        div[data-testid="stDownloadButton"] button span {
+          color: #ffffff !important;
         }
         @media (max-width: 900px) {
           .hero { display: block; }
