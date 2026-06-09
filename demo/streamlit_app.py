@@ -35,11 +35,30 @@ def main() -> None:
 
     with st.sidebar:
         st.markdown("### Run settings")
-        source_mode = st.radio("Candidate data", ["Official sample", "Upload JSON/JSONL"], index=0)
-        limit = st.slider("Candidates to rank", min_value=10, max_value=100, value=50, step=10)
+        source_mode = st.radio(
+            "Candidate data",
+            ["Official sample", "Upload JSON/JSONL"],
+            index=0,
+            key="source_mode",
+            on_change=_clear_demo_result,
+        )
+        limit = st.slider(
+            "Candidates to rank",
+            min_value=10,
+            max_value=100,
+            value=50,
+            step=10,
+            key="candidate_limit",
+            on_change=_clear_demo_result,
+        )
         uploaded = None
         if source_mode == "Upload JSON/JSONL":
-            uploaded = st.file_uploader("Upload candidate JSON or JSONL", type=["json", "jsonl"])
+            uploaded = st.file_uploader(
+                "Upload candidate JSON or JSONL",
+                type=["json", "jsonl"],
+                key="candidate_upload",
+                on_change=_clear_demo_result,
+            )
 
         st.markdown("---")
         st.caption("Official rank-time path stays CPU-only, deterministic, and network-free.")
@@ -66,6 +85,10 @@ def main() -> None:
         return
 
     _render_result(st.session_state["demo_result"])
+
+
+def _clear_demo_result() -> None:
+    st.session_state.pop("demo_result", None)
 
 
 def _hero() -> None:
